@@ -2,18 +2,12 @@
 name=QInfra
 qgisMinimumVersion=3.22
 qgisMaximumVersion=3.99
-description=Modular open-source QGIS plugin for infrastructure and cadastral mapping — fetch and visualize PDOK layers such as luchtfoto, BGT, and BRK.
-version=0.1.0
+description=QInfra: PDOK Luchtfoto (WMTS), Projectgebied-laag, PNG+PGW export (EPSG:28992). Downloaddialoog met selectie-vakjes.
+version=0.2.7
 author=Kaartster.BV
 email=kaartster.bv@gamil
-about=QInfra is a free, modular alternative to Infracadmap. MVP: request and add luchtfoto, BGT, or BRK data for a selected area.
-tracker=https://github.com/kaartster/QInfra/issues
-repository=https://github.com/kaartster/QInfra
-homepage=https://github.com/kaartster/QInfra
+about=Downloaddialoog: kies wat je wilt downloaden (Luchtfoto nu werkend; BGT/BRK volgen). Luchtfoto heeft resolutie-schuif met live schatting.
 category=Plugins
-icon=icons/icon.svg
+icon=icons/luchtfoto.svg
 experimental=True
 deprecated=False
-
-[documentation]
-changelog=Initial skeleton that loads and shows one action.
