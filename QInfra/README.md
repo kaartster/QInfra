@@ -1,4 +1,4 @@
-# QInfra — QGIS-plugin voor Nederlandse infra (v0.2.7)
+# QInfra — QGIS-plugin voor Nederlandse infra (v0.1.0)
 
 QInfra is een kleine, praktische QGIS-plugin voor het snel laden en exporteren van PDOK luchtfoto's binnen Nederland. De plugin werkt standaard in RD New (EPSG:28992) en is gericht op een eenvoudige workflow: laad landelijke WMTS-luchtfoto, teken een projectgebied en exporteer een georeferende PNG + PGW.
 
