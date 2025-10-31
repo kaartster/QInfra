@@ -1,25 +1,35 @@
-
 from qgis.core import (
-    QgsProject, QgsRasterLayer, QgsCoordinateReferenceSystem, QgsRectangle,
-    QgsVectorLayer, QgsFeature, QgsGeometry, QgsSymbol, QgsSimpleFillSymbolLayer, QgsWkbTypes
+    QgsProject,
+    QgsRasterLayer,
+    QgsCoordinateReferenceSystem,
+    QgsRectangle,
+    QgsVectorLayer,
+    QgsFeature,
+    QgsGeometry,
+    QgsSymbol,
+    QgsSimpleFillSymbolLayer,
+    QgsWkbTypes,
+    QgsMapSettings,
+    QgsMapRendererParallelJob,
 )
 from qgis.PyQt.QtCore import QCoreApplication, QSize
 from qgis.PyQt.QtWidgets import QFileDialog
-from qgis.core import QgsMapSettings, QgsMapRendererParallelJob
+import os
 
 LAYER_NAAM_PROJECTGEBIED = "Projectgebied (RD)"
-
-def tr(t):
-    return QCoreApplication.translate("QInfra", t)
-
 PDOK_WMTS_LUCHTFOTO = "https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0?"
 
-def zorg_voor_project_crs_rdnew():
+def tr(text: str) -> str:
+    return QCoreApplication.translate("QInfra", text)
+
+def zorg_voor_project_crs_rdnew() -> None:
+    """Set project CRS to EPSG:28992 if it is different."""
     rd = QgsCoordinateReferenceSystem("EPSG:28992")
     if QgsProject.instance().crs() != rd:
         QgsProject.instance().setCrs(rd)
 
-def voeg_pdok_luchtfoto_wmts_toe(laagnaam="Luchtfoto (PDOK, WMTS)"):
+def voeg_pdok_luchtfoto_wmts_toe(laagnaam: str = "Luchtfoto (PDOK, WMTS)") -> QgsRasterLayer:
+    """Add PDOK WMTS luchtfoto layer to the project and set canvas extent."""
     zorg_voor_project_crs_rdnew()
     uri = (
         f"url={PDOK_WMTS_LUCHTFOTO}"
@@ -40,27 +50,40 @@ def voeg_pdok_luchtfoto_wmts_toe(laagnaam="Luchtfoto (PDOK, WMTS)"):
         iface.mapCanvas().refresh()
     return rl
 
-def _vind_luchtfoto_layer():
+def _vind_luchtfoto_layer() -> QgsRasterLayer | None:
+    """Return the first raster WMS layer whose name contains 'luchtfoto' (case-insensitive)."""
     for lyr in QgsProject.instance().mapLayers().values():
         if isinstance(lyr, QgsRasterLayer) and lyr.providerType() == "wms" and "luchtfoto" in lyr.name().lower():
             return lyr
     return None
 
-def exporteer_luchtfoto_bbox(rect_rd: QgsRectangle, resolutie_m=0.25):
+def exporteer_luchtfoto_bbox(rect_rd: QgsRectangle, resolutie_m: float = 0.25, out_path: str | None = None):
+    """
+    Export the WMTS layer for the given rect to a PNG + PGW.
+    If out_path is provided it is used; otherwise a save dialog is shown.
+    Returns (path, pgw_path, px_w, px_h) or None if cancelled.
+    """
     zorg_voor_project_crs_rdnew()
     from qgis.utils import iface
-    luchtfoto = _vind_luchtfoto_layer()
-    if luchtfoto is None:
-        luchtfoto = voeg_pdok_luchtfoto_wmts_toe()
+
+    luchtfoto = _vind_luchtfoto_layer() or voeg_pdok_luchtfoto_wmts_toe()
 
     width_m = rect_rd.width()
     height_m = rect_rd.height()
     px_w = max(1, int(round(width_m / resolutie_m)))
     px_h = max(1, int(round(height_m / resolutie_m)))
 
-    path, _ = QFileDialog.getSaveFileName(iface.mainWindow(), tr("Opslaan als"), "luchtfoto.png", "PNG (*.png)")
-    if not path:
-        return None
+    if out_path:
+        path = out_path
+    else:
+        default_name = "luchtfoto.png"
+        path, _ = QFileDialog.getSaveFileName(iface.mainWindow(), tr("Opslaan als"), default_name, "PNG (*.png)")
+        if not path:
+            return None
+
+    d = os.path.dirname(path)
+    if d and not os.path.exists(d):
+        os.makedirs(d, exist_ok=True)
 
     ms = QgsMapSettings()
     ms.setDestinationCrs(QgsCoordinateReferenceSystem("EPSG:28992"))
@@ -84,7 +107,8 @@ def exporteer_luchtfoto_bbox(rect_rd: QgsRectangle, resolutie_m=0.25):
 
     return path, pgw_path, px_w, px_h
 
-def maak_of_update_projectgebied_layer(rect_rd: QgsRectangle, naam=LAYER_NAAM_PROJECTGEBIED) -> QgsVectorLayer:
+def maak_of_update_projectgebied_layer(rect_rd: QgsRectangle, naam: str = LAYER_NAAM_PROJECTGEBIED) -> QgsVectorLayer:
+    """Create or replace the project-area memory layer with a single rectangular feature."""
     for lyr in QgsProject.instance().mapLayersByName(naam):
         QgsProject.instance().removeMapLayer(lyr.id())
 
@@ -108,7 +132,8 @@ def maak_of_update_projectgebied_layer(rect_rd: QgsRectangle, naam=LAYER_NAAM_PR
     QgsProject.instance().addMapLayer(vl, True)
     return vl
 
-def lees_projectgebied_rect(naam=LAYER_NAAM_PROJECTGEBIED):
+def lees_projectgebied_rect(naam: str = LAYER_NAAM_PROJECTGEBIED) -> QgsRectangle | None:
+    """Return the combined extent of all polygon features in the project-area layer, or None."""
     lagen = QgsProject.instance().mapLayersByName(naam)
     if not lagen:
         return None

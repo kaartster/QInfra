@@ -2,11 +2,11 @@
 name=QInfra
 qgisMinimumVersion=3.22
 qgisMaximumVersion=3.99
-description=QInfra: PDOK Luchtfoto (WMTS), Projectgebied-laag, PNG+PGW export (EPSG:28992). Downloaddialoog met selectie-vakjes.
+description=QInfra: PDOK Luchtfoto (WMTS), Projectgebied-laag, PNG+PGW export (EPSG:28992).
 version=0.2.7
-author=Kaartster.BV
-email=kaartster.bv@gamil
-about=Downloaddialoog: kies wat je wilt downloaden (Luchtfoto nu werkend; BGT/BRK volgen). Luchtfoto heeft resolutie-schuif met live schatting.
+author=Kaartster BV
+email=kaartster.bv@gmail.com
+about=Eenvoudige plugin: laad PDOK luchtfoto's, teken projectgebied en exporteer PNG+PGW. BGT/BRK volgen.
 category=Plugins
 icon=icons/luchtfoto.svg
 experimental=True
