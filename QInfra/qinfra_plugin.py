@@ -14,6 +14,8 @@ import os
 
 from .pdok_lagen import (
     voeg_pdok_luchtfoto_wmts_toe,
+    voeg_pdok_bgt_wmts_toe,
+    voeg_pdok_brk_wmts_toe,
     exporteer_luchtfoto_bbox,
     zorg_voor_project_crs_rdnew,
     maak_of_update_projectgebied_layer,
@@ -83,6 +85,8 @@ class QInfraPlugin:
         icon_lucht = QIcon(os.path.join(base, "icons", "luchtfoto.svg"))
         icon_dl = QIcon(os.path.join(base, "icons", "download.svg"))
         icon_rect = QIcon(os.path.join(base, "icons", "rect.svg"))
+        icon_bgt = QIcon(os.path.join(base, "icons", "icon.svg"))  # TODO: create BGT-specific icon
+        icon_brk = QIcon(os.path.join(base, "icons", "icon.svg"))  # TODO: create BRK-specific icon
 
         a1 = QAction(icon_lucht, self.tr("Luchtfoto"), self.iface.mainWindow())
         a1.setToolTip(self.tr("Luchtfoto"))
@@ -90,6 +94,20 @@ class QInfraPlugin:
         self.iface.addPluginToMenu("QInfra", a1)
         self.toolbar.addAction(a1)
         self.actions.append(a1)
+
+        a_bgt = QAction(icon_bgt, self.tr("BGT"), self.iface.mainWindow())
+        a_bgt.setToolTip(self.tr("Basisregistratie Grootschalige Topografie"))
+        a_bgt.triggered.connect(self.laad_bgt)
+        self.iface.addPluginToMenu("QInfra", a_bgt)
+        self.toolbar.addAction(a_bgt)
+        self.actions.append(a_bgt)
+
+        a_brk = QAction(icon_brk, self.tr("BRK"), self.iface.mainWindow())
+        a_brk.setToolTip(self.tr("Basisregistratie Kadaster (Kadastrale kaart)"))
+        a_brk.triggered.connect(self.laad_brk)
+        self.iface.addPluginToMenu("QInfra", a_brk)
+        self.toolbar.addAction(a_brk)
+        self.actions.append(a_brk)
 
         a2 = QAction(icon_rect, self.tr("Projectgebied"), self.iface.mainWindow())
         a2.setToolTip(self.tr("Teken rechthoek en maak laag 'Projectgebied (RD)'") )
@@ -114,6 +132,18 @@ class QInfraPlugin:
     def laad_luchtfoto(self):
         try:
             voeg_pdok_luchtfoto_wmts_toe()
+        except Exception as e:
+            QMessageBox.critical(self.iface.mainWindow(), "QInfra", str(e))
+
+    def laad_bgt(self):
+        try:
+            voeg_pdok_bgt_wmts_toe()
+        except Exception as e:
+            QMessageBox.critical(self.iface.mainWindow(), "QInfra", str(e))
+
+    def laad_brk(self):
+        try:
+            voeg_pdok_brk_wmts_toe()
         except Exception as e:
             QMessageBox.critical(self.iface.mainWindow(), "QInfra", str(e))
 

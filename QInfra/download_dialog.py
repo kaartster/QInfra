@@ -14,8 +14,8 @@ class DownloadDialog(QDialog):
         # ---------- checkboxes ----------
         self.cb_lucht = QCheckBox("Luchtfoto")
         self.cb_lucht.setChecked(True)
-        self.cb_bgt = QCheckBox("BGT (binnenkort)"); self.cb_bgt.setEnabled(False)
-        self.cb_brk = QCheckBox("BRK (binnenkort)"); self.cb_brk.setEnabled(False)
+        self.cb_bgt = QCheckBox("BGT"); self.cb_bgt.setEnabled(True)
+        self.cb_brk = QCheckBox("BRK"); self.cb_brk.setEnabled(True)
 
         # ---------- slider ----------
         self.slider = QSlider(Qt.Horizontal)

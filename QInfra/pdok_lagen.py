@@ -17,7 +17,45 @@ from qgis.PyQt.QtWidgets import QFileDialog
 import os
 
 LAYER_NAAM_PROJECTGEBIED = "Projectgebied (RD)"
-PDOK_WMTS_LUCHTFOTO = "https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0?"
+
+# PDOK WMTS service configurations
+PDOK_SERVICES = {
+    "luchtfoto": {
+        "url": "https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0?",
+        "layer": "Actueel_orthoHR", 
+        "name": "Luchtfoto (PDOK, WMTS)",
+        "format": "image/jpeg",
+        "description": "Actuele luchtfoto's van Nederland"
+    },
+    "bgt": {
+        "url": "https://service.pdok.nl/lv/bgt/wmts/v1_0?",
+        "layers": {
+            "standaard": "standaardvisualisatie",
+            "achtergrond": "achtergrondvisualisatie", 
+            "icoon": "icoonvisualisatie",
+            "omtrek": "omtrekgerichtevisualisatie",
+            "pastel": "pastelvisualisatie"
+        },
+        "default_layer": "standaardvisualisatie",
+        "name": "BGT (PDOK, WMTS)",
+        "format": "image/png",
+        "description": "Basisregistratie Grootschalige Topografie"
+    },
+    "brk": {
+        "url": "https://service.pdok.nl/kadaster/kadastralekaart/wmts/v5_0?",
+        "layers": {
+            "standaard": "kadastralekaart",
+            "kwaliteit": "kadastralekaart_kwaliteit"
+        },
+        "default_layer": "kadastralekaart", 
+        "name": "Kadastrale kaart (PDOK, WMTS)",
+        "format": "image/png",
+        "description": "Kadastrale percelen en grenzen"
+    }
+}
+
+# Legacy constant for backward compatibility
+PDOK_WMTS_LUCHTFOTO = PDOK_SERVICES["luchtfoto"]["url"]
 
 def tr(text: str) -> str:
     return QCoreApplication.translate("QInfra", text)
@@ -28,34 +66,120 @@ def zorg_voor_project_crs_rdnew() -> None:
     if QgsProject.instance().crs() != rd:
         QgsProject.instance().setCrs(rd)
 
-def voeg_pdok_luchtfoto_wmts_toe(laagnaam: str = "Luchtfoto (PDOK, WMTS)") -> QgsRasterLayer:
-    """Add PDOK WMTS luchtfoto layer to the project and set canvas extent."""
+def voeg_pdok_wmts_toe(service_key: str, layer_key: str = None, custom_name: str = None) -> QgsRasterLayer:
+    """Add a PDOK WMTS layer to the project.
+    
+    Args:
+        service_key: Key for the service in PDOK_SERVICES ("luchtfoto", "bgt", "brk")
+        layer_key: For services with multiple layers, specify which one (optional)
+        custom_name: Override the default layer name (optional)
+    
+    Returns:
+        QgsRasterLayer: The added layer
+    
+    Raises:
+        RuntimeError: If service not found or layer couldn't be loaded
+    """
     zorg_voor_project_crs_rdnew()
+    
+    if service_key not in PDOK_SERVICES:
+        raise RuntimeError(tr(f"Onbekende PDOK service: {service_key}"))
+    
+    service = PDOK_SERVICES[service_key]
+    
+    # Determine layer name
+    if "layers" in service:
+        # Multi-layer service (BGT, BRK)
+        if layer_key and layer_key in service["layers"]:
+            layer_name = service["layers"][layer_key]
+        else:
+            layer_name = service["default_layer"]
+    else:
+        # Single layer service (luchtfoto)
+        layer_name = service["layer"]
+    
+    # Build WMTS URI
     uri = (
-        f"url={PDOK_WMTS_LUCHTFOTO}"
+        f"url={service['url']}"
         f"&service=WMTS&request=GetCapabilities"
-        f"&layers=Actueel_orthoHR"
+        f"&layers={layer_name}"
         f"&tileMatrixSet=EPSG:28992"
-        f"&format=image/jpeg"
+        f"&format={service['format']}"
         f"&styles=default"
     )
+    
+    # Create layer name
+    if custom_name:
+        laagnaam = custom_name
+    elif layer_key and "layers" in service:
+        laagnaam = f"{service['name']} ({layer_key})"
+    else:
+        laagnaam = service["name"]
+    
     rl = QgsRasterLayer(uri, laagnaam, "wms")
     if not rl.isValid():
-        raise RuntimeError(tr("Kon Luchtfoto (WMTS) niet laden."))
+        raise RuntimeError(tr(f"Kon {laagnaam} niet laden."))
+    
     QgsProject.instance().addMapLayer(rl)
+    
+    # Set canvas extent if available
     ext = rl.extent()
     if not ext.isEmpty():
         from qgis.utils import iface
         iface.mapCanvas().setExtent(ext)
         iface.mapCanvas().refresh()
+    
     return rl
+
+def voeg_pdok_luchtfoto_wmts_toe(laagnaam: str = "Luchtfoto (PDOK, WMTS)") -> QgsRasterLayer:
+    """Add PDOK WMTS luchtfoto layer to the project and set canvas extent."""
+    return voeg_pdok_wmts_toe("luchtfoto", custom_name=laagnaam)
+
+def voeg_pdok_bgt_wmts_toe(layer_key: str = "standaard", laagnaam: str = None) -> QgsRasterLayer:
+    """Add PDOK BGT WMTS layer to the project.
+    
+    Args:
+        layer_key: BGT visualization type ("standaard", "achtergrond", "icoon", "omtrek", "pastel")
+        laagnaam: Custom layer name (optional)
+    """
+    return voeg_pdok_wmts_toe("bgt", layer_key=layer_key, custom_name=laagnaam)
+
+def voeg_pdok_brk_wmts_toe(layer_key: str = "standaard", laagnaam: str = None) -> QgsRasterLayer:
+    """Add PDOK Kadastrale kaart (BRK) WMTS layer to the project.
+    
+    Args:
+        layer_key: BRK visualization type ("standaard", "kwaliteit") 
+        laagnaam: Custom layer name (optional)
+    """
+    return voeg_pdok_wmts_toe("brk", layer_key=layer_key, custom_name=laagnaam)
+
+def _vind_pdok_layer(layer_type: str) -> QgsRasterLayer | None:
+    """Return the first raster WMS layer matching the given type.
+    
+    Args:
+        layer_type: Type to search for ("luchtfoto", "bgt", "brk")
+    """
+    search_terms = {
+        "luchtfoto": ["luchtfoto"],
+        "bgt": ["bgt", "grootschalige", "topografie"],
+        "brk": ["kadastrale", "kadastraal", "brk", "kadaster"]
+    }
+    
+    if layer_type not in search_terms:
+        return None
+        
+    terms = search_terms[layer_type]
+    
+    for lyr in QgsProject.instance().mapLayers().values():
+        if isinstance(lyr, QgsRasterLayer) and lyr.providerType() == "wms":
+            layer_name_lower = lyr.name().lower()
+            if any(term in layer_name_lower for term in terms):
+                return lyr
+    return None
 
 def _vind_luchtfoto_layer() -> QgsRasterLayer | None:
     """Return the first raster WMS layer whose name contains 'luchtfoto' (case-insensitive)."""
-    for lyr in QgsProject.instance().mapLayers().values():
-        if isinstance(lyr, QgsRasterLayer) and lyr.providerType() == "wms" and "luchtfoto" in lyr.name().lower():
-            return lyr
-    return None
+    return _vind_pdok_layer("luchtfoto")
 
 def exporteer_luchtfoto_bbox(rect_rd: QgsRectangle, resolutie_m: float = 0.25, out_path: str | None = None):
     """
