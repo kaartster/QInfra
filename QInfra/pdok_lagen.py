@@ -11,6 +11,7 @@ from qgis.core import (
     QgsWkbTypes,
     QgsMapSettings,
     QgsMapRendererParallelJob,
+    QgsPointXY,
 )
 from qgis.PyQt.QtCore import QCoreApplication, QSize
 from qgis.PyQt.QtWidgets import QFileDialog
@@ -20,15 +21,37 @@ LAYER_NAAM_PROJECTGEBIED = "Projectgebied (RD)"
 
 # PDOK WMTS service configurations
 PDOK_SERVICES = {
+    "brt": {
+        "url": "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0",
+        "layers": {
+            "standaard": "standaard",
+            "grijs": "grijs", 
+            "pastel": "pastel",
+            "water": "water"
+        },
+        "default_layer": "standaard",
+        "name": "BRT Achtergrondkaart (PDOK, WMTS)",
+        "format": "image/png",
+        "description": "Topografische achtergrondkaart van Nederland"
+    },
     "luchtfoto": {
-        "url": "https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0?",
-        "layer": "Actueel_orthoHR", 
+        "url": "https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0",
+        "layers": {
+            "8cm": "Actueel_orthoHR",
+            "25cm": "Actueel_ortho25"
+        },
+        "default_layer": "Actueel_orthoHR",
         "name": "Luchtfoto (PDOK, WMTS)",
         "format": "image/jpeg",
         "description": "Actuele luchtfoto's van Nederland"
     },
     "bgt": {
-        "url": "https://service.pdok.nl/lv/bgt/wmts/v1_0?",
+        "url": "https://service.pdok.nl/lv/bgt/wmts/v1_0",
+        "url_alternatives": [
+            "https://service.pdok.nl/bgt/wmts/v1_0",
+            "https://geodata.nationaalgeoregister.nl/bgt/wmts",
+            "https://service.pdok.nl/lv/bgt/wmts"
+        ],
         "layers": {
             "standaard": "standaardvisualisatie",
             "achtergrond": "achtergrondvisualisatie", 
@@ -42,7 +65,12 @@ PDOK_SERVICES = {
         "description": "Basisregistratie Grootschalige Topografie"
     },
     "brk": {
-        "url": "https://service.pdok.nl/kadaster/kadastralekaart/wmts/v5_0?",
+        "url": "https://service.pdok.nl/kadaster/kadastralekaart/wmts/v5_0",
+        "url_alternatives": [
+            "https://service.pdok.nl/kadaster/kadastralekaart/wmts",
+            "https://geodata.nationaalgeoregister.nl/kadastralekaart/wmts", 
+            "https://service.pdok.nl/brk/wmts"
+        ],
         "layers": {
             "standaard": "Kadastralekaart",
             "kwaliteit": "Kadastralekaart_kwaliteitsvisualisatie"
@@ -98,12 +126,86 @@ def voeg_pdok_wmts_toe(service_key: str, layer_key: str = None, custom_name: str
         # Single layer service (luchtfoto)
         layer_name = service["layer"]
     
-    # Build WMTS URI
+    # Build WMTS URI to match QGIS format exactly
+    uri = (
+        f"contextualWMSLegend=0"
+        f"&crs=EPSG:28992"
+        f"&dpiMode=7"
+        f"&featureCount=10"
+        f"&format={service['format']}"
+        f"&layers={layer_name}"
+        f"&styles=default"
+        f"&tileMatrixSet=EPSG:28992"
+        f"&tilePixelRatio=0"
+        f"&url={service['url']}?request%3DGetCapabilities%26service%3DWMTS"
+    )
+    
+    # Debug logging (remove in production)
+    # print(f"DEBUG: Loading {service_key} with URI: {uri}")
+    
+    # Create layer name
+    if custom_name:
+        laagnaam = custom_name
+    elif layer_key and "layers" in service:
+        laagnaam = f"{service['name']} ({layer_key})"
+    else:
+        laagnaam = service["name"]
+    
+    # Use WMS provider (not WMTS) as shown in working example
+    rl = QgsRasterLayer(uri, laagnaam, "wms")
+    if not rl.isValid():
+        # Enhanced error reporting
+        error_msg = f"Kon {laagnaam} niet laden.\nURI: {uri}\nError: {rl.error().message()}"
+        raise RuntimeError(tr(error_msg))
+    
+    # Debug layer properties (remove in production)
+    # print(f"DEBUG: Layer valid: {rl.isValid()}")
+    # print(f"DEBUG: Layer CRS: {rl.crs().authid()}")
+    # print(f"DEBUG: Layer extent: {rl.extent()}")
+    
+    QgsProject.instance().addMapLayer(rl)
+    
+    # Always zoom to Amsterdam center for consistent experience
+    from qgis.utils import iface
+    from qgis.PyQt.QtCore import QTimer
+    
+    def apply_zoom():
+        canvas = iface.mapCanvas()
+        amsterdam_center = QgsPointXY(121000, 487000)  # RD coordinates for Amsterdam center
+        scale = 5000  # 1:5,000 scale - ensures BGT/BRK visibility (they need <1:10,000)
+        canvas.setCenter(amsterdam_center)
+        canvas.zoomScale(scale)
+        canvas.refresh()
+    
+    # Apply zoom immediately and with slight delay for reliability
+    apply_zoom()
+    QTimer.singleShot(100, apply_zoom)  # Retry after 100ms if needed
+    
+    return rl
+
+def voeg_pdok_wmts_toe_v2(service_key: str, layer_key: str = None, custom_name: str = None) -> QgsRasterLayer:
+    """Alternative WMTS loading approach using proper WMTS provider instead of WMS."""
+    zorg_voor_project_crs_rdnew()
+    
+    if service_key not in PDOK_SERVICES:
+        raise RuntimeError(tr(f"Onbekende PDOK service: {service_key}"))
+    
+    service = PDOK_SERVICES[service_key]
+    
+    # Determine layer name
+    if "layers" in service:
+        if layer_key and layer_key in service["layers"]:
+            layer_name = service["layers"][layer_key]
+        else:
+            layer_name = service["default_layer"]
+    else:
+        layer_name = service["layer"]
+    
+    # Build WMTS URI using different format
     uri = (
         f"url={service['url']}"
-        f"&service=WMTS&request=GetCapabilities"
         f"&layers={layer_name}"
-        f"&tileMatrixSet=EPSG:28992"
+        f"&tilematrixset=EPSG:28992"
         f"&format={service['format']}"
         f"&styles=default"
     )
@@ -116,24 +218,42 @@ def voeg_pdok_wmts_toe(service_key: str, layer_key: str = None, custom_name: str
     else:
         laagnaam = service["name"]
     
-    rl = QgsRasterLayer(uri, laagnaam, "wms")
+    # Try WMTS provider instead of WMS
+    rl = QgsRasterLayer(uri, laagnaam, "wmts")
     if not rl.isValid():
-        raise RuntimeError(tr(f"Kon {laagnaam} niet laden."))
+        error_msg = f"Kon {laagnaam} niet laden (WMTS provider).\nURI: {uri}\nError: {rl.error().message()}"
+        raise RuntimeError(tr(error_msg))
     
     QgsProject.instance().addMapLayer(rl)
     
-    # Set canvas extent if available
-    ext = rl.extent()
-    if not ext.isEmpty():
-        from qgis.utils import iface
-        iface.mapCanvas().setExtent(ext)
-        iface.mapCanvas().refresh()
+    # Always zoom to Amsterdam center for consistent experience
+    from qgis.utils import iface
+    from qgis.PyQt.QtCore import QTimer
+    
+    def apply_zoom():
+        canvas = iface.mapCanvas()
+        amsterdam_center = QgsPointXY(121000, 487000)  # RD coordinates for Amsterdam center
+        scale = 5000  # 1:5,000 scale - ensures BGT/BRK visibility (they need <1:10,000)
+        canvas.setCenter(amsterdam_center)
+        canvas.zoomScale(scale)
+        canvas.refresh()
+    
+    # Apply zoom immediately and with slight delay for reliability
+    apply_zoom()
+    QTimer.singleShot(100, apply_zoom)  # Retry after 100ms if needed
     
     return rl
-
-def voeg_pdok_luchtfoto_wmts_toe(laagnaam: str = "Luchtfoto (PDOK, WMTS)") -> QgsRasterLayer:
     """Add PDOK WMTS luchtfoto layer to the project and set canvas extent."""
     return voeg_pdok_wmts_toe("luchtfoto", custom_name=laagnaam)
+
+def voeg_pdok_brt_wmts_toe(layer_key: str = "standaard", laagnaam: str = None) -> QgsRasterLayer:
+    """Add PDOK BRT Achtergrondkaart WMTS layer to the project.
+    
+    Args:
+        layer_key: BRT visualization type ("standaard", "grijs", "pastel", "water")
+        laagnaam: Custom layer name (optional)
+    """
+    return voeg_pdok_wmts_toe("brt", layer_key=layer_key, custom_name=laagnaam)
 
 def voeg_pdok_bgt_wmts_toe(layer_key: str = "standaard", laagnaam: str = None) -> QgsRasterLayer:
     """Add PDOK BGT WMTS layer to the project.
@@ -152,6 +272,48 @@ def voeg_pdok_brk_wmts_toe(layer_key: str = "standaard", laagnaam: str = None) -
         laagnaam: Custom layer name (optional)
     """
     return voeg_pdok_wmts_toe("brk", layer_key=layer_key, custom_name=laagnaam)
+
+def voeg_pdok_luchtfoto_wmts_toe(laagnaam: str = "Luchtfoto (PDOK, WMTS)") -> QgsRasterLayer:
+    """Add PDOK WMTS luchtfoto layer to the project and set canvas extent."""
+    return voeg_pdok_wmts_toe("luchtfoto", custom_name=laagnaam)
+
+def _is_layer_already_loaded(layer_name: str) -> bool:
+    """Check if a layer with the given name already exists in the project.
+    
+    Args:
+        layer_name: Name of the layer to check for
+        
+    Returns:
+        True if layer exists, False otherwise
+    """
+    for layer in QgsProject.instance().mapLayers().values():
+        if layer.name() == layer_name:
+            return True
+    return False
+
+def _generate_layer_name(service_key: str, layer_key: str = None, custom_name: str = None) -> str:
+    """Generate the layer name that would be created for given service and options.
+    
+    Args:
+        service_key: Service type ("brt", "luchtfoto", "bgt", "brk")
+        layer_key: Visualization option key 
+        custom_name: Custom layer name (overrides generation)
+        
+    Returns:
+        The layer name that would be used
+    """
+    if custom_name:
+        return custom_name
+        
+    if service_key not in PDOK_SERVICES:
+        return f"Unknown service: {service_key}"
+        
+    service = PDOK_SERVICES[service_key]
+    
+    if layer_key and "layers" in service:
+        return f"{service['name']} ({layer_key})"
+    else:
+        return service["name"]
 
 def _vind_pdok_layer(layer_type: str) -> QgsRasterLayer | None:
     """Return the first raster WMS layer matching the given type.

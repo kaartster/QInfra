@@ -16,12 +16,17 @@ from .pdok_lagen import (
     voeg_pdok_luchtfoto_wmts_toe,
     voeg_pdok_bgt_wmts_toe,
     voeg_pdok_brk_wmts_toe,
+    voeg_pdok_brt_wmts_toe,
+    voeg_pdok_wmts_toe,
+    _is_layer_already_loaded,
+    _generate_layer_name,
     exporteer_luchtfoto_bbox,
     zorg_voor_project_crs_rdnew,
     maak_of_update_projectgebied_layer,
     lees_projectgebied_rect,
 )
 from .download_dialog import DownloadDialog
+from .achtergrond_dialog import AchtergrondMapDialog
 
 class RechthoekTool(QgsMapTool):
     """Interactive map tool to draw a rectangle and pass it to a callback."""
@@ -82,33 +87,19 @@ class QInfraPlugin:
 
     def initGui(self):
         base = os.path.dirname(__file__)
-        icon_lucht = QIcon(os.path.join(base, "icons", "luchtfoto.svg"))
+        icon_achtergrond = QIcon(os.path.join(base, "icons", "luchtfoto.svg"))  # Reuse luchtfoto icon
         icon_dl = QIcon(os.path.join(base, "icons", "download.svg"))
         icon_rect = QIcon(os.path.join(base, "icons", "rect.svg"))
-        icon_bgt = QIcon(os.path.join(base, "icons", "bgt.svg"))
-        icon_brk = QIcon(os.path.join(base, "icons", "brk.svg"))
 
-        a1 = QAction(icon_lucht, self.tr("Luchtfoto"), self.iface.mainWindow())
-        a1.setToolTip(self.tr("Luchtfoto"))
-        a1.triggered.connect(self.laad_luchtfoto)
-        self.iface.addPluginToMenu("QInfra", a1)
-        self.toolbar.addAction(a1)
-        self.actions.append(a1)
+        # Achtergrond map button
+        a_achtergrond = QAction(icon_achtergrond, self.tr("Achtergrond map"), self.iface.mainWindow())
+        a_achtergrond.setToolTip(self.tr("Selecteer achtergrond kaarten (Luchtfoto, BGT, BRK)"))
+        a_achtergrond.triggered.connect(self.open_achtergrond_dialog)
+        self.iface.addPluginToMenu("QInfra", a_achtergrond)
+        self.toolbar.addAction(a_achtergrond)
+        self.actions.append(a_achtergrond)
 
-        a_bgt = QAction(icon_bgt, self.tr("BGT"), self.iface.mainWindow())
-        a_bgt.setToolTip(self.tr("Basisregistratie Grootschalige Topografie"))
-        a_bgt.triggered.connect(self.laad_bgt)
-        self.iface.addPluginToMenu("QInfra", a_bgt)
-        self.toolbar.addAction(a_bgt)
-        self.actions.append(a_bgt)
-
-        a_brk = QAction(icon_brk, self.tr("BRK"), self.iface.mainWindow())
-        a_brk.setToolTip(self.tr("Basisregistratie Kadaster (Kadastrale kaart)"))
-        a_brk.triggered.connect(self.laad_brk)
-        self.iface.addPluginToMenu("QInfra", a_brk)
-        self.toolbar.addAction(a_brk)
-        self.actions.append(a_brk)
-
+        # Project area button
         a2 = QAction(icon_rect, self.tr("Projectgebied"), self.iface.mainWindow())
         a2.setToolTip(self.tr("Teken rechthoek en maak laag 'Projectgebied (RD)'") )
         a2.triggered.connect(self.start_projectgebied_tekenen)
@@ -116,6 +107,7 @@ class QInfraPlugin:
         self.toolbar.addAction(a2)
         self.actions.append(a2)
 
+        # Download button
         a3 = QAction(icon_dl, self.tr("Download"), self.iface.mainWindow())
         a3.setToolTip(self.tr("Kies wat je wilt downloaden voor het projectgebied"))
         a3.triggered.connect(self.open_download_dialog)
@@ -129,23 +121,65 @@ class QInfraPlugin:
             self.toolbar.removeAction(a)
         del self.toolbar
 
-    def laad_luchtfoto(self):
-        try:
-            voeg_pdok_luchtfoto_wmts_toe()
-        except Exception as e:
-            QMessageBox.critical(self.iface.mainWindow(), "QInfra", str(e))
-
-    def laad_bgt(self):
-        try:
-            voeg_pdok_bgt_wmts_toe()
-        except Exception as e:
-            QMessageBox.critical(self.iface.mainWindow(), "QInfra", str(e))
-
-    def laad_brk(self):
-        try:
-            voeg_pdok_brk_wmts_toe()
-        except Exception as e:
-            QMessageBox.critical(self.iface.mainWindow(), "QInfra", str(e))
+    def open_achtergrond_dialog(self):
+        dialog = AchtergrondMapDialog(self.iface.mainWindow())
+        if dialog.exec_():
+            selections = dialog.get_selections()
+            
+            try:
+                loaded_count = 0
+                skipped_count = 0
+                
+                for service_key, layer_option in selections.items():
+                    # Generate the layer name that would be created
+                    if service_key == "brt":
+                        layer_name = _generate_layer_name("brt", layer_option)
+                    elif service_key == "luchtfoto":
+                        # Map layer option to readable name
+                        if layer_option == "8cm":
+                            layer_name = "Luchtfoto (PDOK, WMTS) (8cm)"
+                        else:
+                            layer_name = "Luchtfoto (PDOK, WMTS) (25cm)"
+                    elif service_key == "bgt":
+                        layer_name = _generate_layer_name("bgt", layer_option)
+                    elif service_key == "brk":
+                        layer_name = _generate_layer_name("brk", layer_option)
+                    else:
+                        continue
+                    
+                    # Check if layer already exists
+                    if _is_layer_already_loaded(layer_name):
+                        skipped_count += 1
+                        continue
+                    
+                    # Load the layer
+                    if service_key == "brt":
+                        voeg_pdok_brt_wmts_toe(layer_option)
+                    elif service_key == "luchtfoto":
+                        voeg_pdok_luchtfoto_wmts_toe(layer_name)
+                    elif service_key == "bgt":
+                        voeg_pdok_bgt_wmts_toe(layer_option)
+                    elif service_key == "brk":
+                        voeg_pdok_brk_wmts_toe(layer_option)
+                    
+                    loaded_count += 1
+                        
+                # Show result message
+                if loaded_count == 0 and skipped_count == 0:
+                    QMessageBox.information(
+                        self.iface.mainWindow(),
+                        "QInfra",
+                        self.tr("Geen achtergrond kaarten geselecteerd.")
+                    )
+                elif skipped_count > 0:
+                    QMessageBox.information(
+                        self.iface.mainWindow(),
+                        "QInfra",
+                        self.tr(f"Geladen: {loaded_count} nieuwe kaarten.\nOvergeslagen: {skipped_count} reeds geladen kaarten.")
+                    )
+                    
+            except Exception as e:
+                QMessageBox.critical(self.iface.mainWindow(), "QInfra", str(e))
 
     def start_projectgebied_tekenen(self):
         zorg_voor_project_crs_rdnew()
