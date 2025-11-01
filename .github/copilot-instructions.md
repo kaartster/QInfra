@@ -82,8 +82,47 @@ for lyr in QgsProject.instance().mapLayers().values():
 - No `.qrc` resource files (keeping simple file structure)
 - MIT license from Kaartster BV
 
+## Roadmap & Future Enhancements
+
+### **Phase 1: Multi-Layer Export (Pre-QGIS Repository)**
+**Vision**: Transform download functionality from single-layer to comprehensive multi-layer export with format-appropriate outputs
+- **Auto-detect visible background layers**: Scan project for all loaded PDOK services (BRT, Luchtfoto, BGT, BRK)
+- **Smart export by layer type**: 
+  - Luchtfoto → PNG + PGW (highest available resolution: 8cm or 25cm)
+  - BGT/BRK → WFS vector export (GeoJSON/GeoPackage for editability)
+  - BRT → PNG + PGW (cartographic visualization)
+- **Simplified UX**: Remove resolution slider, auto-select highest quality, size estimation + progress bar
+- **Parallel processing**: Efficient simultaneous raster and vector exports with progress tracking
+- **Intelligent file naming**: `ProjectName_Luchtfoto-8cm.png`, `ProjectName_BGT-standaard.gpkg`
+
+**Implementation Strategy:**
+- Extend `exporteer_luchtfoto_bbox()` for raster layers (PNG + PGW)
+- Add new `exporteer_vector_wfs()` for BGT/BRK (WFS → GeoPackage/GeoJSON)
+- Update `download_dialog.py` with progress bar and cancel functionality
+- Implement automatic resolution detection and size estimation
+- Add WFS service integration for vector data access
+
+**User Workflow Enhancement:**
+1. Load multiple background services (BRT + Luchtfoto + BGT)
+2. Adjust layer visibility to achieve desired combination
+3. Draw project area and click "Export All" 
+4. Monitor progress with cancel option
+5. Receive mixed outputs: raster PNGs for imagery + vector files for editable data
+
+### **Phase 2: Extended PDOK Integration**
+- AHN (height data) integration for terrain analysis
+- NWB (road networks) for transportation planning
+- Enhanced service discovery and metadata display
+
+### **Phase 3: Advanced Export Features**
+- Custom export formats (GeoTIFF, ECW)
+- Multi-resolution batch exports
+- Layer composition and styling preservation
+
 ## Testing & Debugging
 - Test with various project area sizes to verify memory limits
 - Verify EPSG:28992 coordinate transformations
 - Check PGW worldfile accuracy in external GIS software
 - Validate WMTS layer loading with PDOK service availability
+- **Multi-layer testing**: Verify consistent export across different layer combinations
+- **Performance testing**: Monitor memory usage during parallel layer rendering
