@@ -44,10 +44,10 @@ PDOK_SERVICES = {
     "brk": {
         "url": "https://service.pdok.nl/kadaster/kadastralekaart/wmts/v5_0?",
         "layers": {
-            "standaard": "kadastralekaart",
-            "kwaliteit": "kadastralekaart_kwaliteit"
+            "standaard": "Kadastralekaart",
+            "kwaliteit": "Kadastralekaart_kwaliteitsvisualisatie"
         },
-        "default_layer": "kadastralekaart", 
+        "default_layer": "Kadastralekaart", 
         "name": "Kadastrale kaart (PDOK, WMTS)",
         "format": "image/png",
         "description": "Kadastrale percelen en grenzen"

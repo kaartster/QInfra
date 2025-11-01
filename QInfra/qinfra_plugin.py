@@ -85,8 +85,8 @@ class QInfraPlugin:
         icon_lucht = QIcon(os.path.join(base, "icons", "luchtfoto.svg"))
         icon_dl = QIcon(os.path.join(base, "icons", "download.svg"))
         icon_rect = QIcon(os.path.join(base, "icons", "rect.svg"))
-        icon_bgt = QIcon(os.path.join(base, "icons", "icon.svg"))  # TODO: create BGT-specific icon
-        icon_brk = QIcon(os.path.join(base, "icons", "icon.svg"))  # TODO: create BRK-specific icon
+        icon_bgt = QIcon(os.path.join(base, "icons", "bgt.svg"))
+        icon_brk = QIcon(os.path.join(base, "icons", "brk.svg"))
 
         a1 = QAction(icon_lucht, self.tr("Luchtfoto"), self.iface.mainWindow())
         a1.setToolTip(self.tr("Luchtfoto"))
